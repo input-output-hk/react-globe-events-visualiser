@@ -38,7 +38,7 @@ jobs:
             - node-v1-{{ .Branch }}-{{ checksum "package-lock.json" }}
       - add_ssh_keys:
           fingerprints:
-            - "05:36:cc:89:74:14:c1:8d:5c:b3:dc:95:56:6f:8a:87"
+            - "38:67:2f:a7:7d:32:8c:d5:8b:e2:17:2e:9b:db:1a:f7"
       - run:
           name: Building
           command: npm run build
@@ -113,7 +113,7 @@ jobs:
           at: public
       - add_ssh_keys:
           fingerprints:
-            - "05:36:cc:89:74:14:c1:8d:5c:b3:dc:95:56:6f:8a:87"
+            - "38:67:2f:a7:7d:32:8c:d5:8b:e2:17:2e:9b:db:1a:f7"
       - run:
           name: Setup git config
           command: |
