@@ -1,0 +1,184 @@
+version: 2.1
+executors:
+  main:
+    docker:
+      - image: 'circleci/node:10'
+
+jobs:
+  install_dependencies:
+    executor: main
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - node-v1-{{ .Branch }}-{{ checksum "package-lock.json" }}
+            - node-v1-{{ .Branch }}-
+            - node-v1-
+      - run: npm ci
+      - save_cache:
+          paths:
+            - ./node_modules
+          key: node-v1-{{ .Branch }}-{{ checksum "package-lock.json" }}
+  build:
+    executor: main
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - node-v1-{{ .Branch }}-{{ checksum "package-lock.json" }}
+      - run:
+          name: Building
+          command: npm run build
+  deploy_production:
+    executor: main
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - node-v1-{{ .Branch }}-{{ checksum "package-lock.json" }}
+      - add_ssh_keys:
+          fingerprints:
+            - "05:36:cc:89:74:14:c1:8d:5c:b3:dc:95:56:6f:8a:87"
+      - run:
+          name: Building
+          command: npm run build
+      - run:
+          name: Setup git config
+          command: |
+                git config user.email "$GIT_EMAIL"
+                git config user.name "$GIT_USERNAME"
+      - run:
+          name: Adding build files to git
+          command: git add --all
+      - run:
+          name: Commit build
+          command: |
+            source ./scripts/export-package-versions.sh
+            if [[ `git status --porcelain` ]]; then
+              git commit -m '[ci skip] build $PACKAGE_VERSION'
+            fi
+      - run:
+          name: Add tags
+          command: |
+            source ./scripts/export-package-versions.sh
+            git tag -f -a v$PACKAGE_VERSION -m "v$PACKAGE_VERSION"
+            git tag -f -a v$MINOR_PACKAGE_VERSION -m "v$MINOR_PACKAGE_VERSION"
+            git tag -f -a v$MAJOR_PACKAGE_VERSION -m "v$MAJOR_PACKAGE_VERSION"
+      - run:
+          name: Push commit and tags
+          command: |
+            git branch --set-upstream-to=origin/$CIRCLE_BRANCH $CIRCLE_BRANCH
+            git push origin $CIRCLE_BRANCH
+            git push -f origin --tags
+  build_demo:
+    executor: main
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - node-v1-{{ .Branch }}-{{ checksum "package-lock.json" }}
+      - run:
+          name: Install peer dependencies
+          command: |
+            npm install --no-save npm-install-peers
+            ./node_modules/.bin/npm-install-peers
+      - run:
+          name: Building demo
+          command: npm run build:demo
+      - persist_to_workspace:
+          root: public
+          paths:
+            - "*"
+  test:
+    executor: main
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - node-v1-{{ .Branch }}-{{ checksum "package-lock.json" }}
+      - run:
+          name: Linting javascript
+          command: npm run lint
+      - run:
+          name: Running automated tests
+          command: npm test
+  deploy_demo:
+    executor: main
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - node-v1-{{ .Branch }}-{{ checksum "package-lock.json" }}
+      - attach_workspace:
+          at: public
+      - add_ssh_keys:
+          fingerprints:
+            - "05:36:cc:89:74:14:c1:8d:5c:b3:dc:95:56:6f:8a:87"
+      - run:
+          name: Setup git config
+          command: |
+                git config user.email "$GIT_EMAIL"
+                git config user.name "$GIT_USERNAME"
+      - run:
+          name: Deploying to GitHub pages
+          command: npm run deploy:democi
+
+workflows:
+  version: 2
+  pr:
+    jobs:
+      - install_dependencies:
+          filters:
+            branches:
+              ignore:
+                - master
+      - build:
+          requires:
+            - install_dependencies
+          filters:
+            branches:
+              ignore:
+                - master
+      - test:
+          requires:
+            - install_dependencies
+          filters:
+            branches:
+              ignore:
+                - master
+  production:
+    jobs:
+      - install_dependencies:
+          filters:
+            branches:
+              only:
+                - master
+      - test:
+          requires:
+            - install_dependencies
+          filters:
+            branches:
+              only:
+                - master
+      - deploy_production:
+          requires:
+            - test
+          filters:
+            branches:
+              only:
+                - master
+      - build_demo:
+          requires:
+            - test
+            - deploy_production
+          filters:
+            branches:
+              only:
+                - master
+      - deploy_demo:
+          requires:
+            - build_demo
+          filters:
+            branches:
+              only:
+                - master
