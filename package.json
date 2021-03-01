@@ -36,7 +36,7 @@
     "react-addons-css-transition-group": "^15.6.2",
     "react-icons": "^3.6.1",
     "regenerator-runtime": "^0.13.2",
-    "three": "^0.104.0",
+    "three": "^0.125.0",
     "three-orbitcontrols": "^2.102.1"
   },
   "peerDependencies": {
